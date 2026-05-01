@@ -2,6 +2,8 @@
 
 A Single Page Application (SPA) built with React, Vite, TypeScript, and Tailwind CSS.
 
+This web-site is to provide information about lessonscore app that is developed out of a different repository. 
+
 ## Getting Started
 
 ### Prerequisites

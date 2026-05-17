@@ -1,0 +1,138 @@
+name: Deploy to AWS S3 + CloudFront
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: prod-ls-base-bucket-us-east-1
+  CLOUDFRONT_DISTRIBUTION_ID: EMX3PEBSODJQL
+  AWS_ROLE_ARN: arn:aws:iam::106636821587:role/CICDRoleForPulumiToCreateMaintainLessonscore.com-basedOnS3
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint code
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      - name: Run tests
+        run: npm test --if-present
+        continue-on-error: true
+
+      - name: Build application
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          echo "Build output directory contents:"
+          ls -lah dist/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to AWS
+    needs: build
+    # Only deploy on push to main (not on PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for OIDC
+      contents: read
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          role-session-name: github-actions-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS credentials
+        run: |
+          echo "AWS Identity:"
+          aws sts get-caller-identity
+
+      - name: Deploy static assets with long cache (hashed files)
+        run: |
+          echo "Uploading static assets (js, css, media) with long cache..."
+          aws s3 sync dist/ s3://${{ env.S3_BUCKET }}/ \
+            --exclude "index.html" \
+            --exclude "service-worker.js" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --delete
+
+      - name: Deploy index.html with no-cache
+        run: |
+          echo "Uploading index.html with no-cache..."
+          aws s3 cp dist/index.html s3://${{ env.S3_BUCKET }}/index.html \
+            --cache-control "no-cache, no-store, must-revalidate" \
+            --metadata-directive REPLACE
+
+      - name: Deploy service worker with no-cache (if exists)
+        run: |
+          if [ -f dist/service-worker.js ]; then
+            echo "Uploading service-worker.js with no-cache..."
+            aws s3 cp dist/service-worker.js s3://${{ env.S3_BUCKET }}/service-worker.js \
+              --cache-control "no-cache, no-store, must-revalidate" \
+              --metadata-directive REPLACE
+          else
+            echo "No service-worker.js found, skipping..."
+          fi
+
+      - name: Invalidate CloudFront cache
+        run: |
+          echo "Creating CloudFront invalidation..."
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "CloudFront invalidation created: $INVALIDATION_ID"
+          echo "Note: Invalidation may take 5-10 minutes to complete"
+
+      - name: Deployment summary
+        run: |
+          echo "=========================================="
+          echo "✅ Deployment completed successfully!"
+          echo "=========================================="
+          echo "S3 Bucket: s3://${{ env.S3_BUCKET }}"
+          echo "CloudFront Distribution: ${{ env.CLOUDFRONT_DISTRIBUTION_ID }}"
+          echo "Website URL: https://app.lessonscore.com"
+          echo ""
+          echo "Cache strategy:"
+          echo "  - index.html: no-cache (always fresh)"
+          echo "  - Static assets: 1 year cache (immutable)"
+          echo ""
+          echo "CloudFront cache invalidated (/*)"
+          echo "=========================================="

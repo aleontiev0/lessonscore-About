@@ -12,7 +12,7 @@ env:
   AWS_REGION: us-east-1
   S3_BUCKET: prod-ls-base-bucket-us-east-1
   CLOUDFRONT_DISTRIBUTION_ID: EMX3PEBSODJQL
-  AWS_ROLE_ARN: arn:aws:iam::106636821587:role/CICDRoleForPulumiToCreateMaintainLessonscore.com-basedOnS3
+  AWS_ROLE_ARN: arn:aws:iam::106636821587:role/GitHubActionsDeployRole-for-lessonscore-About
   NODE_VERSION: '20'
 
 jobs:

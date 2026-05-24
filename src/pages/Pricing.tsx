@@ -55,7 +55,7 @@ const Pricing = () => {
                     ))}
                   </div>
                   <Button className="w-full mt-6" size="lg" asChild>
-                    <a href="https://ls-vue.vercel.app" target="_blank" rel="noopener noreferrer">
+                    <a href="https://app.lessonscore.com" target="_blank" rel="noopener noreferrer">
                       Start Now
                     </a>
                   </Button>

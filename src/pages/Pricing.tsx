@@ -93,8 +93,10 @@ const Pricing = () => {
                       </div>
                     ))}
                   </div>
-                  <Button variant="outline" className="w-full mt-6" size="lg">
-                    Contact Sales
+                  <Button variant="outline" className="w-full mt-6" size="lg" asChild>
+                    <a href="mailto:logicbound@gmail.com">
+                      Contact Sales
+                    </a>
                   </Button>
                 </CardContent>
               </Card>
